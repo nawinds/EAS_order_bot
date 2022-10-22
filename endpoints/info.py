@@ -47,6 +47,14 @@ async def about(callback):
     await bot.send_message(callback.from_user.id, text)
 
 
+# @dp.message_handler(commands=["test"])
+# async def test_webapp(callback):
+#     text = f"Click on the button below to open webapp"
+#     markup = InlineKeyboardMarkup()
+#     markup.row(InlineKeyboardButton("Click here", web_app=types.WebAppInfo(url="https://pnn.im")))
+#     await bot.send_message(callback.from_user.id, text, reply_markup=markup)
+
+
 @dp.callback_query_handler(text="act:calculator")
 @dp.message_handler(commands=["calculator"])
 async def calculator(callback):
