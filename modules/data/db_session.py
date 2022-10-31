@@ -1,10 +1,12 @@
 """
 Database manager
 """
+import logging
+
 import sqlalchemy as sa
+import sqlalchemy.ext.declarative as dec
 from sqlalchemy import orm
 from sqlalchemy.orm import Session
-import sqlalchemy.ext.declarative as dec
 
 SqlAlchemyBase = dec.declarative_base()
 
@@ -22,15 +24,14 @@ def global_init(db_file):
         return
 
     if not db_file or not db_file.strip():
+        logging.critical("DB file is not specified")
         raise Exception("DB file is not specified")
 
     conn_str = f'sqlite:///{db_file.strip()}?check_same_thread=False'
-    print(f"Connecting to DB on {conn_str}")
+    logging.info(f"Connecting to DB on {conn_str}")
 
     engine = sa.create_engine(conn_str, echo=False)
     __factory = orm.sessionmaker(bind=engine)
-
-    from . import __all_models
 
     SqlAlchemyBase.metadata.create_all(engine)
 

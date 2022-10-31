@@ -1,2 +1,2 @@
-aiogram==2.22.2
-SQLAlchemy==1.4.42
+aiogram
+SQLAlchemy
