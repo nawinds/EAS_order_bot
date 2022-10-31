@@ -2,6 +2,7 @@
 Bot endpoints for getting information
 """
 import logging
+from math import ceil
 from typing import Union
 
 from aiogram import types
@@ -111,7 +112,7 @@ async def process_price(message: types.Message, state: FSMContext):
         await message.reply("Укажите только число", reply_markup=ForceReply())
         return
 
-    price_formatted = str(price * exchange_rate).replace('.', '\\.')
+    price_formatted = str(ceil(price * exchange_rate)).replace('.', '\\.')
     logging.info("User %s calculated price (%s)", message.from_user.id, price * exchange_rate)
     await state.finish()
     await message.reply(f"Стоимость этого товара у нас составит "
