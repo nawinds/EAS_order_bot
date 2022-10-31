@@ -1,5 +1,8 @@
+"""
+Database manager
+"""
 import sqlalchemy as sa
-import sqlalchemy.orm as orm
+from sqlalchemy import orm
 from sqlalchemy.orm import Session
 import sqlalchemy.ext.declarative as dec
 
@@ -9,6 +12,10 @@ __factory = None
 
 
 def global_init(db_file):
+    """
+    Database initialisation. Creating DB file and tables
+    :param db_file: path to DB file
+    """
     global __factory
 
     if __factory:
@@ -29,5 +36,9 @@ def global_init(db_file):
 
 
 def create_session() -> Session:
+    """
+    Creates DB session
+    :return: DB session
+    """
     global __factory
     return __factory()

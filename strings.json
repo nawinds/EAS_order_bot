@@ -2,5 +2,8 @@
   "start_info": "\\<start info\\>",
   "feedback_url": "https://instagram.com",
   "contact_user_id": "972048830",
-  "about_info": "_\\<Здесь инфа\\>_"
+  "about_info": "_\\<Здесь инфа\\>_",
+  "admin_ids": [
+    972048830
+  ]
 }
