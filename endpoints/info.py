@@ -2,6 +2,7 @@
 Bot endpoints for getting information
 """
 import logging
+from typing import Union
 
 from aiogram import types
 from aiogram.dispatcher import FSMContext
@@ -41,10 +42,10 @@ async def start_help(message: types.Message):
         text += admin_text
 
     markup = InlineKeyboardMarkup()
-    markup.row(InlineKeyboardButton("Информация", callback_data="act:about"),
-               InlineKeyboardButton("Отзывы", url=STRINGS.feedback_url))
-    markup.row(InlineKeyboardButton("Калькулятор стоимости", callback_data="act:calculator"))
-    markup.row(InlineKeyboardButton("Написать нам", url=f"tg://user?id={STRINGS.contact_user_id}"))
+    markup.row(InlineKeyboardButton("ℹ️ Информация", callback_data="act:about"),
+               InlineKeyboardButton("💬 Отзывы", url=STRINGS.feedback_url))
+    markup.row(InlineKeyboardButton("💴 Калькулятор стоимости", callback_data="act:calculator"))
+    markup.row(InlineKeyboardButton("🧑‍🔧 Написать нам", url=f"tg://user?id={STRINGS.contact_user_id}"))
 
     logging.debug("User %s requested a help message", message.from_user.id)
     await message.reply(text, reply_markup=markup)
@@ -52,7 +53,7 @@ async def start_help(message: types.Message):
 
 @dp.callback_query_handler(text="act:about")
 @dp.message_handler(commands=["about"])
-async def about(callback: types.CallbackQuery):
+async def about(callback: Union[types.CallbackQuery, types.Message]):
     """
     /about command handler. Also processes 'about' button from main bot menu.
     Used to get information about company
@@ -62,13 +63,14 @@ async def about(callback: types.CallbackQuery):
            f"{STRINGS.about_info}"
 
     logging.debug("User %s got about message", callback.from_user.id)
-    await callback.answer()
+    if type(callback) == types.CallbackQuery:
+        await callback.answer()
     await bot.send_message(callback.from_user.id, text)
 
 
 @dp.callback_query_handler(text="act:calculator")
 @dp.message_handler(commands=["calculator"])
-async def calculator(callback: types.CallbackQuery):
+async def calculator(callback: Union[types.CallbackQuery, types.Message]):
     """
     /calculator command handler. Also processes 'calculator' button from main bot menu.
     Used to calculate price
@@ -77,15 +79,17 @@ async def calculator(callback: types.CallbackQuery):
     await CalculatorState.price.set()
 
     session = create_session()
-    exchange_rate = session.query(Variable).filter(Variable.name == "exchange_rate").first().value
+    exchange_rate = str(session.query(Variable)
+                        .filter(Variable.name == "exchange_rate").first().value).replace(".", "\\.")
 
     text = f"Чтобы узнать, сколько будет стоить у нас товар в рублях, " \
            f"пришлите его цену в юанях, а мы пересчитаем по нашему " \
-           f"курсу \\({exchange_rate} руб\\. \\= 1 юань\\)\n\n" \
+           f"курсу \\(*{exchange_rate} руб\\. \\= 1 юань*\\)\n\n" \
            f"_Чтобы отменить установку курса, отправьте /cancel_"
 
     logging.debug("User %s opened calculator", callback.from_user.id)
-    await callback.answer()
+    if type(callback) == types.CallbackQuery:
+        await callback.answer()
     await bot.send_message(callback.from_user.id, text, reply_markup=ForceReply())
 
 
