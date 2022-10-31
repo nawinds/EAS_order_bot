@@ -12,6 +12,7 @@ from aiogram.utils import executor
 from aiogram.types.inline_keyboard import InlineKeyboardMarkup, InlineKeyboardButton
 from aiogram.types.force_reply import ForceReply
 from aiogram import md
+from modules.config import STRINGS
 
 
 class CalculatorState(StatesGroup):
@@ -21,7 +22,7 @@ class CalculatorState(StatesGroup):
 @dp.message_handler(commands=["start", "help"])
 async def start_help(message: types.Message):
     text = f"Привет\\!\n" \
-           f"\\<some info\\>\n" \
+           f"{STRINGS.start_info}\n" \
            f"Воспользуйся меню ниже, " \
            f"чтобы узнать о нас больше и сделать заказ\\!"
 
@@ -32,9 +33,9 @@ async def start_help(message: types.Message):
 
     markup = InlineKeyboardMarkup()
     markup.row(InlineKeyboardButton("Информация", callback_data="act:about"),
-               InlineKeyboardButton("Отзывы", url="https://instagram.com"))
+               InlineKeyboardButton("Отзывы", url=STRINGS.feedback_url))
     markup.row(InlineKeyboardButton("Калькулятор стоимости", callback_data="act:calculator"))
-    markup.row(InlineKeyboardButton("Написать нам", url="tg://resolve?domain=nawinds"))
+    markup.row(InlineKeyboardButton("Написать нам", url=f"tg://user?id={STRINGS.contact_user_id}"))
 
     logging.debug("User %s requested a help message", message.from_user.id)
     await message.reply(text, reply_markup=markup)
@@ -44,7 +45,7 @@ async def start_help(message: types.Message):
 @dp.message_handler(commands=["about"])
 async def about(callback: types.CallbackQuery):
     text = f"*Кто мы?*\n" \
-           f"_\\<Здесь инфа\\>_"
+           f"{STRINGS.about_info}"
 
     logging.debug("User %s got about message", callback.from_user.id)
     await bot.send_message(callback.from_user.id, text)
