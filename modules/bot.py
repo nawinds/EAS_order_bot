@@ -3,6 +3,6 @@ from aiogram.contrib.fsm_storage.memory import MemoryStorage
 import aiogram
 
 
-bot = aiogram.Bot(TOKEN, parse_mode=aiogram.types.ParseMode.MARKDOWN)
+bot = aiogram.Bot(TOKEN, parse_mode=aiogram.types.ParseMode.MARKDOWN_V2)
 storage = MemoryStorage()
 dp = aiogram.Dispatcher(bot, storage=storage)

@@ -19,13 +19,13 @@ class CalculatorState(StatesGroup):
 
 
 @dp.message_handler(commands=["start", "help"])
-async def start_help(message):
-    text = f"Привет!\n" \
-           f"<some info>\n" \
+async def start_help(message: types.Message):
+    text = f"Привет\\!\n" \
+           f"\\<some info\\>\n" \
            f"Воспользуйся меню ниже, " \
-           f"чтобы узнать о нас больше и сделать заказ!"
+           f"чтобы узнать о нас больше и сделать заказ\\!"
 
-    admin_text = f"\n\n---- *ДЛЯ АДМИНА* ----\n\n" \
+    admin_text = f"\n\n\\-\\-\\-\\- *ДЛЯ АДМИНА* \\-\\-\\-\\-\n\n" \
                  f"/exchange\\_rate — установить курс с наценкой"
     if is_admin(message):
         text += admin_text
@@ -36,43 +36,48 @@ async def start_help(message):
     markup.row(InlineKeyboardButton("Калькулятор стоимости", callback_data="act:calculator"))
     markup.row(InlineKeyboardButton("Написать нам", url="tg://resolve?domain=nawinds"))
 
+    logging.debug("User %s requested a help message", message.from_user.id)
     await message.reply(text, reply_markup=markup)
 
 
 @dp.callback_query_handler(text="act:about")
 @dp.message_handler(commands=["about"])
-async def about(callback):
+async def about(callback: types.CallbackQuery):
     text = f"*Кто мы?*\n" \
-           f"_<Здесь инфа>_"
+           f"_\\<Здесь инфа\\>_"
+
+    logging.debug("User %s got about message", callback.from_user.id)
     await bot.send_message(callback.from_user.id, text)
 
 
 @dp.callback_query_handler(text="act:calculator")
 @dp.message_handler(commands=["calculator"])
-async def calculator(callback):
+async def calculator(callback: types.CallbackQuery):
     exchange_rate = 10
-
     await CalculatorState.price.set()
 
-    markup = ForceReply(selective=False)
     text = f"Чтобы узнать, сколько будет стоить у нас товар в рублях, " \
            f"пришлите его цену в юанях, а мы пересчитаем по нашему " \
-           f"курсу ({exchange_rate} руб. = 1 юань)\n\n" \
+           f"курсу \\({exchange_rate} руб\\. \\= 1 юань\\)\n\n" \
            f"_Чтобы отменить установку курса, отправьте /cancel_"
+
+    logging.debug("User %s opened calculator", callback.from_user.id)
     await bot.send_message(callback.from_user.id, text, reply_markup=ForceReply())
 
 
-@dp.message_handler(is_admin, state=CalculatorState.price)
+@dp.message_handler(state=CalculatorState.price)
 async def process_price(message: types.Message, state: FSMContext):
     exchange_rate = 10
 
     try:
         price = float(message.text.replace(",", ".").strip())
     except ValueError:
+        logging.info("User %s failed to calculate price", message.from_user.id)
         await message.reply("Укажите только число", reply_markup=ForceReply())
         return
 
-    print(price * exchange_rate)
+    price_formatted = str(price * exchange_rate).replace('.', '\\.')
+    logging.info("User %s calculated price", message.from_user.id)
     await state.finish()
     await message.reply(f"Стоимость этого товара у нас составит "
-                        f"*{price * exchange_rate}* руб.")
+                        f"*{price_formatted}* руб\\.")
