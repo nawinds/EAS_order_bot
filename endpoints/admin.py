@@ -63,10 +63,10 @@ async def process_exchange_rate(message: types.Message, state: FSMContext):
     :param state: current dialogue state
     """
     try:
-        exchange_rate = message.text.replace(",", ".").strip()
+        exchange_rate = float(message.text.replace(",", ".").strip())
     except ValueError:
         logging.info("User %s failed to set a new exchange rate", message.from_user.id)
-        await message.reply("Укажите только число.\n"
+        await message.reply("Укажите только число\\.\n"
                             "_Чтобы отменить установку курса, "
                             "отправьте /cancel_", reply_markup=ForceReply())
         return

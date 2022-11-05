@@ -108,7 +108,7 @@ async def process_price(message: types.Message, state: FSMContext):
         price = float(message.text.replace(",", ".").strip())
     except ValueError:
         logging.info("User %s failed to calculate price", message.from_user.id)
-        await message.reply("Укажите только число.\n"
+        await message.reply("Укажите только число\\.\n"
                             "_Чтобы выйти из режима калькулятора, "
                             "отправьте /cancel_", reply_markup=ForceReply())
         return
