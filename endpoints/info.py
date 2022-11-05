@@ -63,7 +63,7 @@ async def about(callback: Union[types.CallbackQuery, types.Message]):
     text = STRINGS.about_info
 
     logging.debug("User %s got about message", callback.from_user.id)
-    if type(callback) == types.CallbackQuery:
+    if isinstance(callback, types.CallbackQuery):
         await callback.answer()
     await bot.send_message(callback.from_user.id, text)
 
@@ -88,7 +88,7 @@ async def calculator(callback: Union[types.CallbackQuery, types.Message]):
            f"_Чтобы выйти из режима калькулятора, отправьте /cancel_"
 
     logging.debug("User %s opened calculator", callback.from_user.id)
-    if type(callback) == types.CallbackQuery:
+    if isinstance(callback, types.CallbackQuery):
         await callback.answer()
     await bot.send_message(callback.from_user.id, text, reply_markup=ForceReply())
 

@@ -19,8 +19,7 @@ if not TOKEN:
 if not DEBUG:
     logging.critical("No DEBUG environment variable!")
     raise ValueError("No DEBUG environment variable!")
-else:
-    DEBUG = bool(int(DEBUG))
+DEBUG = bool(int(DEBUG))
 
 if not os.path.exists(f"{LOCAL_PATH}/logs"):
     os.mkdir(f"{LOCAL_PATH}/logs")
