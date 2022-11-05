@@ -85,7 +85,7 @@ async def calculator(callback: Union[types.CallbackQuery, types.Message]):
     text = f"Чтобы узнать, сколько будет стоить у нас товар в рублях, " \
            f"пришлите его цену в юанях, а мы пересчитаем по нашему " \
            f"курсу \\(*{exchange_rate} руб\\. \\= 1 юань*\\)\n\n" \
-           f"_Чтобы отменить установку курса, отправьте /cancel_"
+           f"_Чтобы выйти из режима калькулятора, отправьте /cancel_"
 
     logging.debug("User %s opened calculator", callback.from_user.id)
     if type(callback) == types.CallbackQuery:
@@ -108,7 +108,9 @@ async def process_price(message: types.Message, state: FSMContext):
         price = float(message.text.replace(",", ".").strip())
     except ValueError:
         logging.info("User %s failed to calculate price", message.from_user.id)
-        await message.reply("Укажите только число", reply_markup=ForceReply())
+        await message.reply("Укажите только число.\n"
+                            "_Чтобы выйти из режима калькулятора, "
+                            "отправьте /cancel_", reply_markup=ForceReply())
         return
 
     price_formatted = str(ceil(price * exchange_rate)).replace('.', '\\.')
