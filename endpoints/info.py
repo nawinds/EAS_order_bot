@@ -41,12 +41,16 @@ async def start_help(message: types.Message):
         text += admin_text
 
     contact_user_id = choice(STRINGS.contact_user_id)
+    if contact_user_id == 452987344:
+        contact_link = f"tg://resolve?domain=zhelninartem"
+    else:
+        contact_link = f"tg://user?id={contact_user_id}"
 
     markup = InlineKeyboardMarkup()
     markup.row(InlineKeyboardButton("ℹ️ Информация", callback_data="act:about"),
                InlineKeyboardButton("💬 Отзывы", url=STRINGS.feedback_url))
     markup.row(InlineKeyboardButton("💴 Калькулятор стоимости", callback_data="act:calculator"))
-    markup.row(InlineKeyboardButton("🧑‍🔧 Сделать заказ", url=f"tg://user?id={contact_user_id}"))
+    markup.row(InlineKeyboardButton("🧑‍🔧 Сделать заказ", url=contact_link))
 
     logging.debug("User %s requested a help message", message.from_user.id)
     await message.reply(text, reply_markup=markup)
