@@ -11,6 +11,7 @@ from aiogram.dispatcher import FSMContext
 from aiogram.dispatcher.filters.state import State, StatesGroup
 from aiogram.types.force_reply import ForceReply
 from aiogram.types.inline_keyboard import InlineKeyboardMarkup, InlineKeyboardButton
+from aiogram.types.chat import ChatType
 
 from modules.bot import dp, bot
 from modules.config import STRINGS
@@ -26,7 +27,7 @@ class CalculatorState(StatesGroup):
     price = State()
 
 
-@dp.message_handler(commands=["start", "help"])
+@dp.message_handler(chat_type=ChatType.PRIVATE, commands=["start", "help"])
 async def start_help(message: types.Message):
     """
     /start and /help command handler.
@@ -47,14 +48,15 @@ async def start_help(message: types.Message):
     markup.row(InlineKeyboardButton("ℹ️ Информация", callback_data="act:about"),
                InlineKeyboardButton("💬 Отзывы", url=STRINGS.feedback_url))
     markup.row(InlineKeyboardButton("💴 Калькулятор стоимости", callback_data="act:calculator"))
-    markup.row(InlineKeyboardButton("🧑‍🔧 Сделать заказ", url=contact_link))
+    markup.row(InlineKeyboardButton("Сделать заказ", callback_data="act:order"))
+    markup.row(InlineKeyboardButton("🧑‍🔧 Написать нам", url=contact_link))
 
     logging.debug("User %s requested a help message", message.from_user.id)
     await message.reply(text, reply_markup=markup)
 
 
-@dp.callback_query_handler(text="act:about")
-@dp.message_handler(commands=["about"])
+@dp.callback_query_handler(chat_type=ChatType.PRIVATE, text="act:about")
+@dp.message_handler(chat_type=ChatType.PRIVATE, commands="about")
 async def about(callback: Union[types.CallbackQuery, types.Message]):
     """
     /about command handler. Also processes 'about' button from main bot menu.
@@ -69,8 +71,8 @@ async def about(callback: Union[types.CallbackQuery, types.Message]):
     await bot.send_message(callback.from_user.id, text)
 
 
-@dp.callback_query_handler(text="act:calculator")
-@dp.message_handler(commands=["calculator"])
+@dp.callback_query_handler(chat_type=ChatType.PRIVATE, text="act:calculator")
+@dp.message_handler(chat_type=ChatType.PRIVATE, commands=["calculator"], )
 async def calculator(callback: Union[types.CallbackQuery, types.Message]):
     """
     /calculator command handler. Also processes 'calculator' button from main bot menu.
@@ -94,7 +96,7 @@ async def calculator(callback: Union[types.CallbackQuery, types.Message]):
     await bot.send_message(callback.from_user.id, text, reply_markup=ForceReply())
 
 
-@dp.message_handler(state=CalculatorState.price)
+@dp.message_handler(chat_type=ChatType.PRIVATE, state=CalculatorState.price)
 async def process_price(message: types.Message, state: FSMContext):
     """
     Chinese products price handler. Used to convert CNY to RUB.

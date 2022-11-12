@@ -8,6 +8,7 @@ from aiogram.dispatcher import FSMContext
 from aiogram.dispatcher.filters import Text
 from aiogram.dispatcher.filters.state import State, StatesGroup
 from aiogram.types.force_reply import ForceReply
+from aiogram.types.chat import ChatType
 
 from modules.bot import dp
 from modules.data.db_session import create_session
@@ -22,7 +23,7 @@ class ExchangeRateState(StatesGroup):
     exchange_rate = State()
 
 
-@dp.message_handler(is_admin, commands="exchange_rate")
+@dp.message_handler(is_admin, chat_type=ChatType.PRIVATE, commands="exchange_rate")
 async def exchange_rate_command(message: types.Message):
     """
     /exchange_rate command handler. Used for setting new exchange rate by bot admins
@@ -36,8 +37,8 @@ async def exchange_rate_command(message: types.Message):
                         reply_markup=ForceReply())
 
 
-@dp.message_handler(state="*", commands="cancel")
-@dp.message_handler(Text(equals="cancel", ignore_case=True), state="*")
+@dp.message_handler(chat_type=ChatType.PRIVATE, state="*", commands="cancel")
+@dp.message_handler(Text(equals="cancel", ignore_case=True), chat_type=ChatType.PRIVATE, state="*")
 async def cancel_handler(message: types.Message, state: FSMContext):
     """
     /cancel command handler. Used to cancel operations
@@ -54,7 +55,7 @@ async def cancel_handler(message: types.Message, state: FSMContext):
     await message.reply("Действие отменено", reply_markup=types.ReplyKeyboardRemove())
 
 
-@dp.message_handler(is_admin, state=ExchangeRateState.exchange_rate)
+@dp.message_handler(is_admin, chat_type=ChatType.PRIVATE, state=ExchangeRateState.exchange_rate)
 async def process_exchange_rate(message: types.Message, state: FSMContext):
     """
     New exchange rate processing. Handles messages with float values in
