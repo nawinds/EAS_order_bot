@@ -41,10 +41,7 @@ async def start_help(message: types.Message):
         text += admin_text
 
     contact_user_id = choice(STRINGS.contact_user_id)
-    if contact_user_id == 452987344:
-        contact_link = f"tg://resolve?domain=zhelninartem"
-    else:
-        contact_link = f"tg://user?id={contact_user_id}"
+    contact_link = f"tg://user?id={contact_user_id}"
 
     markup = InlineKeyboardMarkup()
     markup.row(InlineKeyboardButton("ℹ️ Информация", callback_data="act:about"),
