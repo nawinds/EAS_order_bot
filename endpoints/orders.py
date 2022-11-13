@@ -62,7 +62,7 @@ async def create_order(message: types.Message, state: FSMContext):
     session.commit()
 
     async with state.proxy() as data:
-        data['order_id'] = order.id
+        data["order_id"] = order.id
 
     order.items.append(OrderItem(url=message.text))
     session.commit()
@@ -74,11 +74,14 @@ async def create_order(message: types.Message, state: FSMContext):
 
     text = f"*Корзина*:\n\n\\- {message.text}\n\n" \
            f"Если Вы хотите добавить в заказ ещё один товар, отправьте ссылку на него\\. " \
-           f"Чтобы закончить оформление заказа, нажмите на кнопку под этим сообщением\\." \
+           f"Чтобы закончить оформление заказа, нажмите на кнопку под этим сообщением\\.\n\n" \
            f"_Чтобы выйти из режима заказа, отправьте /cancel_"
 
     logging.debug("User %s created %s order by adding item", message.from_user.id, order.id)
-    await message.answer(text, reply_markup=markup)
+    cart_msg = await message.answer(text, reply_markup=markup)
+    await message.delete()
+    async with state.proxy() as data:
+        data["cart_msg"] = cart_msg
 
 
 @dp.message_handler(chat_type=ChatType.PRIVATE, state=OrderingState.product)
@@ -91,6 +94,7 @@ async def add_item(message: types.Message, state: FSMContext):
     session = create_session()
     async with state.proxy() as data:
         order = session.query(Order).get(data['order_id'])
+        cart_msg = data["cart_msg"]
 
     order.items.append(OrderItem(url=message.text))
     session.commit()
@@ -102,11 +106,12 @@ async def add_item(message: types.Message, state: FSMContext):
 
     text = f"*Корзина*:\n\n{order_items}\n\n" \
            f"Если Вы хотите добавить в заказ ещё один товар, отправьте ссылку на него\\. " \
-           f"Чтобы закончить оформление заказа, нажмите на кнопку под этим сообщением\\." \
+           f"Чтобы закончить оформление заказа, нажмите на кнопку под этим сообщением\\.\n\n" \
            f"_Чтобы выйти из режима заказа, отправьте /cancel_"
 
     logging.debug("User %s added %s order item", message.from_user.id, order.id)
-    await message.answer(text, reply_markup=markup)
+    await cart_msg.edit_text(text, reply_markup=markup)
+    await message.delete()
 
 
 @dp.callback_query_handler(chat_type=ChatType.PRIVATE, text="act:checkout", state=OrderingState.product)
@@ -118,7 +123,8 @@ async def checkout(callback: types.CallbackQuery, state: FSMContext):
     """
     session = create_session()
     async with state.proxy() as data:
-        order = session.query(Order).get(data['order_id'])
+        order = session.query(Order).get(data["order_id"])
+        await data["cart_msg"].delete()
     await state.finish()
 
     markup = InlineKeyboardMarkup()
@@ -126,7 +132,7 @@ async def checkout(callback: types.CallbackQuery, state: FSMContext):
 
     order_items = '\n'.join([f"\\- {i.url}" for i in order.items])
 
-    text = f"*Ваш заказ №{order.id}*:\n\n{order_items}\n\n" \
+    text = f"*Ваш заказ № {order.id} оформлен\\!*\n\n{order_items}\n\n" \
            f"Мы постаемся как можно быстрее рассмотреть Ваш заказ и " \
            f"определить его итоговую стоимость в рублях\\. " \
            f"Когда мы всё посчитаем, Вам придёт сообщение с суммой заказа и реквизитами для оплаты"
