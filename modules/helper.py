@@ -1,8 +1,9 @@
 """
 Helper functions and message filters
 """
-from modules.config import STRINGS
 from aiogram.types import Message
+
+from modules.config import STRINGS
 
 
 def is_admin(message: Message) -> bool:

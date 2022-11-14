@@ -2,12 +2,11 @@
 Bot entity and database initialisation
 """
 import aiogram
-from aiogram.contrib.fsm_storage.memory import MemoryStorage
 
-from modules.config import DB_PATH
-from modules.config import TOKEN
+from modules.config import TOKEN, DB_PATH, STATES_DB_PATH
 from modules.data.db_session import global_init, create_session
 from modules.data.variables import Variable
+from modules.sqlite_storage import SQLiteStorage
 
 
 def db_init():
@@ -21,6 +20,6 @@ def db_init():
         session.commit()
 
 
-storage = MemoryStorage()
+storage = SQLiteStorage(path=STATES_DB_PATH)
 bot = aiogram.Bot(TOKEN, parse_mode=aiogram.types.ParseMode.MARKDOWN_V2)
 dp = aiogram.Dispatcher(bot, storage=storage)

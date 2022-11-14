@@ -2,23 +2,23 @@
 Bot endpoints for ordering products
 """
 import logging
-from math import ceil
-from random import choice
 from typing import Union
 
+import aiohttp
 from aiogram import types
 from aiogram.dispatcher import FSMContext
+from aiogram.dispatcher.filters import Text
 from aiogram.dispatcher.filters.state import State, StatesGroup
+from aiogram.types.chat import ChatType
 from aiogram.types.force_reply import ForceReply
 from aiogram.types.inline_keyboard import InlineKeyboardMarkup, InlineKeyboardButton
-from aiogram.types.chat import ChatType
+from aiogram.utils.markdown import escape_md
+from aiohttp.client_exceptions import InvalidURL
 
 from modules.bot import dp, bot
 from modules.config import STRINGS
 from modules.data.db_session import create_session
-from modules.data.variables import Variable
-from modules.data.orders import Order, OrderItem, OrderStats
-from modules.helper import is_admin
+from modules.data.orders import Order, OrderItem
 
 
 class OrderingState(StatesGroup):
@@ -56,6 +56,21 @@ async def create_order(message: types.Message, state: FSMContext):
     :param state: current dialogue state
     :param message: Telegram message object
     """
+
+    url = message.text
+    timeout = aiohttp.ClientTimeout(total=3)
+    async with aiohttp.ClientSession(timeout=timeout) as httpsession:
+        try:
+            async with httpsession.get(url) as resp:
+                if resp.status != 200:
+                    raise ValueError
+        except (aiohttp.client_exceptions.InvalidURL, ValueError):
+            logging.debug("User %s failed to create %s order by adding item",
+                          message.from_user.id, order.id)
+            text = "Пожалуйста, введите существующую ссылку\n\n" \
+                   "_Чтобы выйти из режима заказа, отправьте /cancel_"
+            await message.answer(text)
+            return
     session = create_session()
     order = Order(customer=message.from_user.id)
     session.add(order)
@@ -64,7 +79,7 @@ async def create_order(message: types.Message, state: FSMContext):
     async with state.proxy() as data:
         data["order_id"] = order.id
 
-    order.items.append(OrderItem(url=message.text))
+    order.items.append(OrderItem(url=url))
     session.commit()
 
     await OrderingState.next()
@@ -72,7 +87,7 @@ async def create_order(message: types.Message, state: FSMContext):
     markup = InlineKeyboardMarkup()
     markup.row(InlineKeyboardButton("Оформить заказ", callback_data="act:checkout"))
 
-    text = f"*Корзина*:\n\n\\- {message.text}\n\n" \
+    text = f"*Корзина*:\n\n\\- {escape_md(url)}\n\n" \
            f"Если Вы хотите добавить в заказ ещё один товар, отправьте ссылку на него\\. " \
            f"Чтобы закончить оформление заказа, нажмите на кнопку под этим сообщением\\.\n\n" \
            f"_Чтобы выйти из режима заказа, отправьте /cancel_"
@@ -81,7 +96,7 @@ async def create_order(message: types.Message, state: FSMContext):
     cart_msg = await message.answer(text, reply_markup=markup)
     await message.delete()
     async with state.proxy() as data:
-        data["cart_msg"] = cart_msg
+        data["cart_msg"] = str(cart_msg.chat.id) + " " + str(cart_msg.message_id)
 
 
 @dp.message_handler(chat_type=ChatType.PRIVATE, state=OrderingState.product)
@@ -94,15 +109,29 @@ async def add_item(message: types.Message, state: FSMContext):
     session = create_session()
     async with state.proxy() as data:
         order = session.query(Order).get(data['order_id'])
-        cart_msg = data["cart_msg"]
+        cart_msg = data["cart_msg"].split()
 
-    order.items.append(OrderItem(url=message.text))
+    url = message.text
+    timeout = aiohttp.ClientTimeout(total=3)
+    async with aiohttp.ClientSession(timeout=timeout) as httpsession:
+        try:
+            async with httpsession.get(url) as resp:
+                if resp.status != 200:
+                    raise ValueError
+        except (aiohttp.client_exceptions.InvalidURL, ValueError):
+            logging.debug("User %s failed to create %s order by adding item",
+                          message.from_user.id, order.id)
+            text = "Пожалуйста, введите существующую ссылку\n\n" \
+                   "_Чтобы выйти из режима заказа, отправьте /cancel_"
+            await message.answer(text)
+            return
+    order.items.append(OrderItem(url=url))
     session.commit()
 
     markup = InlineKeyboardMarkup()
     markup.row(InlineKeyboardButton("Оформить заказ", callback_data="act:checkout"))
 
-    order_items = '\n'.join([f"\\- {i.url}" for i in order.items])
+    order_items = '\n'.join([f"\\- {escape_md(i.url)}" for i in order.items])
 
     text = f"*Корзина*:\n\n{order_items}\n\n" \
            f"Если Вы хотите добавить в заказ ещё один товар, отправьте ссылку на него\\. " \
@@ -110,7 +139,7 @@ async def add_item(message: types.Message, state: FSMContext):
            f"_Чтобы выйти из режима заказа, отправьте /cancel_"
 
     logging.debug("User %s added %s order item", message.from_user.id, order.id)
-    await cart_msg.edit_text(text, reply_markup=markup)
+    await bot.edit_message_text(text, *cart_msg, reply_markup=markup)
     await message.delete()
 
 
@@ -124,13 +153,13 @@ async def checkout(callback: types.CallbackQuery, state: FSMContext):
     session = create_session()
     async with state.proxy() as data:
         order = session.query(Order).get(data["order_id"])
-        await data["cart_msg"].delete()
+        await bot.delete_message(*data["cart_msg"].split())
     await state.finish()
 
     markup = InlineKeyboardMarkup()
     markup.row(InlineKeyboardButton("Отменить заказ", callback_data=f"act:cancel_order {order.id}"))
 
-    order_items = '\n'.join([f"\\- {i.url}" for i in order.items])
+    order_items = '\n'.join([f"\\- {escape_md(i.url)}" for i in order.items])
 
     text = f"*Ваш заказ № {order.id} оформлен\\!*\n\n{order_items}\n\n" \
            f"Мы постаемся как можно быстрее рассмотреть Ваш заказ и " \
@@ -156,3 +185,15 @@ async def checkout(callback: types.CallbackQuery, state: FSMContext):
     order.new_msg = new_order_message.message_id
     order.status += 1
     session.commit()
+
+
+@dp.callback_query_handler(Text(contains="act:cancel_order"), chat_type=ChatType.PRIVATE, state=OrderingState.product)
+async def cancel(callback: types.CallbackQuery):
+    order_id = callback.data.split()[1]
+    session = create_session()
+    order = session.query(Order).get(order_id)
+    order.items.delete()
+    order.delete()
+    session.commit()
+    await callback.answer("Заказ отменён!")
+    await bot.send_message(callback.from_user.id, f"Заказ {order_id} отменён")

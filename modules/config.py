@@ -10,6 +10,7 @@ TOKEN = os.getenv("TOKEN", None)
 DEBUG = os.getenv("DEBUG", None)
 LOCAL_PATH = os.getcwd()
 DB_PATH = f"{LOCAL_PATH}/modules/data/db/main.db"
+STATES_DB_PATH = f"{LOCAL_PATH}/modules/data/db/states.db"
 AIOGRAM_LOGS_PATH = f"{LOCAL_PATH}/logs/aiogram.log"
 
 
