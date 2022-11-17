@@ -114,7 +114,8 @@ async def process_price(message: types.Message, state: FSMContext):
                             "отправьте /cancel_", reply_markup=ForceReply())
         return
 
-    price_formatted = str(ceil(price * exchange_rate)).replace('.', '\\.')
+    comission = price * exchange_rate * STRINGS.comission_percent
+    price_formatted = str(ceil(price * exchange_rate + comission)).replace('.', '\\.')
     logging.info("User %s calculated price (%s)", message.from_user.id, price * exchange_rate)
     await state.finish()
     await message.reply(f"Стоимость этого товара у нас составит "
