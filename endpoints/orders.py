@@ -187,13 +187,14 @@ async def checkout(callback: types.CallbackQuery, state: FSMContext):
     session.commit()
 
 
-@dp.callback_query_handler(Text(contains="act:cancel_order"), chat_type=ChatType.PRIVATE, state=OrderingState.product)
+@dp.callback_query_handler(Text(contains="act:cancel_order"), chat_type=ChatType.PRIVATE)
 async def cancel(callback: types.CallbackQuery):
     order_id = callback.data.split()[1]
     session = create_session()
     order = session.query(Order).get(order_id)
-    order.items.delete()
-    order.delete()
+    for i in order.items:
+        session.delete(i)
+    session.delete(order)
     session.commit()
     await callback.answer("Заказ отменён!")
-    await bot.send_message(callback.from_user.id, f"Заказ {order_id} отменён")
+    await bot.send_message(callback.from_user.id, f"Заказ {order_id} отменён!")
