@@ -19,8 +19,6 @@ class Order(SqlAlchemyBase):
     total = Column(Integer, default=0)
     status = Column(Integer, default=0)
     origin_msg = Column(Integer, unique=True)
-    new_msg = Column(Integer, unique=True)
-    payment_msg = Column(Integer, unique=True)
     status_msg = Column(Integer, unique=True)
 
     stats = relationship("OrderStats", back_populates="order")
