@@ -1,10 +1,10 @@
 """
 Bot endpoints for ordering products
 """
+import asyncio
 import logging
 from typing import Union
 
-import aiohttp
 from aiogram import types
 from aiogram.dispatcher import FSMContext
 from aiogram.dispatcher.filters import Text
@@ -13,12 +13,12 @@ from aiogram.types.chat import ChatType
 from aiogram.types.force_reply import ForceReply
 from aiogram.types.inline_keyboard import InlineKeyboardMarkup, InlineKeyboardButton
 from aiogram.utils.markdown import escape_md
-from aiohttp.client_exceptions import InvalidURL
 
 from modules.bot import dp, bot
 from modules.config import STRINGS
 from modules.data.db_session import create_session
 from modules.data.orders import Order, OrderItem
+from modules.helper import validate_url
 
 
 class OrderingState(StatesGroup):
@@ -35,7 +35,7 @@ async def new_order(callback: Union[types.CallbackQuery, types.Message]):
     """
     /order command handler. Also processes 'order' button from main bot menu.
     Used to make new orders
-    :param state: current dialogue state
+    :param callback: Telegram callback or message object
     """
     await OrderingState.first.set()
 
@@ -58,19 +58,16 @@ async def create_order(message: types.Message, state: FSMContext):
     """
 
     url = message.text
-    timeout = aiohttp.ClientTimeout(total=3)
-    async with aiohttp.ClientSession(timeout=timeout) as httpsession:
-        try:
-            async with httpsession.get(url) as resp:
-                if resp.status != 200:
-                    raise ValueError
-        except (aiohttp.client_exceptions.InvalidURL, ValueError):
-            logging.debug("User %s failed to create %s order by adding item",
-                          message.from_user.id, order.id)
-            text = "Пожалуйста, введите существующую ссылку\n\n" \
-                   "_Чтобы выйти из режима заказа, отправьте /cancel_"
-            await message.answer(text)
-            return
+    if not await validate_url(url):
+        logging.debug("User %s failed to create order by adding item",
+                      message.from_user.id)
+        text = "Пожалуйста, введите существующую ссылку\n\n" \
+               "_Чтобы выйти из режима заказа, отправьте /cancel_"
+        alert_message = await message.reply(text)
+        await asyncio.sleep(4)
+        await alert_message.delete()
+        await message.delete()
+        return
     session = create_session()
     order = Order(customer=message.from_user.id)
     session.add(order)
@@ -112,19 +109,16 @@ async def add_item(message: types.Message, state: FSMContext):
         cart_msg = data["cart_msg"].split()
 
     url = message.text
-    timeout = aiohttp.ClientTimeout(total=3)
-    async with aiohttp.ClientSession(timeout=timeout) as httpsession:
-        try:
-            async with httpsession.get(url) as resp:
-                if resp.status != 200:
-                    raise ValueError
-        except (aiohttp.client_exceptions.InvalidURL, ValueError):
-            logging.debug("User %s failed to create %s order by adding item",
-                          message.from_user.id, order.id)
-            text = "Пожалуйста, введите существующую ссылку\n\n" \
-                   "_Чтобы выйти из режима заказа, отправьте /cancel_"
-            await message.answer(text)
-            return
+    if not await validate_url(url):
+        logging.debug("User %s failed to create %s order by adding item",
+                      message.from_user.id, order.id)
+        text = "Пожалуйста, введите существующую ссылку\n\n" \
+               "_Чтобы выйти из режима заказа, отправьте /cancel_"
+        alert_message = await message.reply(text)
+        await asyncio.sleep(4)
+        await alert_message.delete()
+        await message.delete()
+        return
     order.items.append(OrderItem(url=url))
     session.commit()
 
@@ -161,7 +155,7 @@ async def checkout(callback: types.CallbackQuery, state: FSMContext):
 
     order_items = '\n'.join([f"\\- {escape_md(i.url)}" for i in order.items])
 
-    text = f"*Ваш заказ № {order.id} оформлен\\!*\n\n{order_items}\n\n" \
+    text = f"*Ваш заказ № {order.id} оформлен ✅\\!*\n\n{order_items}\n\n" \
            f"Мы постаемся как можно быстрее рассмотреть Ваш заказ и " \
            f"определить его итоговую стоимость в рублях\\. " \
            f"Когда мы всё посчитаем, Вам придёт сообщение с суммой заказа и реквизитами для оплаты"
@@ -197,4 +191,17 @@ async def cancel(callback: types.CallbackQuery):
     session.delete(order)
     session.commit()
     await callback.answer("Заказ отменён!")
-    await bot.send_message(callback.from_user.id, f"Заказ {order_id} отменён!")
+    await bot.send_message(callback.from_user.id, f"Заказ {order_id} отменён\\!")
+
+    last_name = callback.from_user.last_name if callback.from_user.last_name else ""
+    order_items = '\n'.join([f"\\- {escape_md(i.url)}" for i in order.items])
+    text = f"*Ваш заказ № {order.id} ОТМЕНЁН ❌\\!*\n\n{order_items}\n\n" \
+           f"Мы постаемся как можно быстрее рассмотреть Ваш заказ и " \
+           f"определить его итоговую стоимость в рублях\\. " \
+           f"Когда мы всё посчитаем, Вам придёт сообщение с суммой заказа и реквизитами для оплаты"
+
+    await callback.message.edit_text(text)
+    await bot.send_message(-STRINGS.new_orders_chat_id, f"[{callback.from_user.first_name} {last_name}]"
+                                                        f"(tg://user?id={callback.from_user.id}) "
+                                                        f"отменил заказ № {order.id}")
+    await bot.delete_message(-STRINGS.new_orders_chat_id, order.new_msg)
