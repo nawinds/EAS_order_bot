@@ -3,7 +3,7 @@ Helper functions and message filters
 """
 import aiohttp
 from aiogram.types import Message
-from aiohttp.client_exceptions import InvalidURL
+from aiohttp.client_exceptions import InvalidURL, ClientConnectorError
 
 from modules.config import STRINGS
 
@@ -38,6 +38,6 @@ async def validate_url(url: str) -> bool:
             async with httpsession.get(url) as resp:
                 if resp.status != 200:
                     raise ValueError
-        except (aiohttp.client_exceptions.InvalidURL, aiohttp.client_exceptions.ClientConnectorError, ValueError):
+        except (InvalidURL, ClientConnectorError, ValueError):
             return False
     return True

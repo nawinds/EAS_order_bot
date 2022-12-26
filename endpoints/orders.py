@@ -41,9 +41,9 @@ async def new_order(callback: Union[types.CallbackQuery, types.Message]):
     """
     await OrderingState.first.set()
 
-    text = f"Чтобы сделать заказ\\, отправьте ссылку на товар, который хотите " \
-           f"заказать\\.\n\n" \
-           f"_Чтобы выйти из режима заказа, отправьте /cancel_"
+    text = "Чтобы сделать заказ\\, отправьте ссылку на товар, который хотите " \
+           "заказать\\.\n\n" \
+           "_Чтобы выйти из режима заказа, отправьте /cancel_"
 
     logging.debug("User %s started ordering", callback.from_user.id)
     if isinstance(callback, types.CallbackQuery):
@@ -139,7 +139,8 @@ async def add_item(message: types.Message, state: FSMContext):
     await message.delete()
 
 
-@dp.callback_query_handler(chat_type=ChatType.PRIVATE, text="act:checkout", state=OrderingState.product)
+@dp.callback_query_handler(chat_type=ChatType.PRIVATE,
+                           text="act:checkout", state=OrderingState.product)
 async def checkout(callback: types.CallbackQuery, state: FSMContext):
     """
     Order checkout.
@@ -211,9 +212,10 @@ async def cancel(callback: types.CallbackQuery):
            f"Когда мы всё посчитаем, Вам придёт сообщение с суммой заказа и реквизитами для оплаты"
 
     await callback.message.edit_text(text, disable_web_page_preview=True)
-    await bot.send_message(-STRINGS.new_orders_chat_id, f"[{callback.from_user.first_name} {last_name}]"
-                                                        f"(tg://user?id={callback.from_user.id}) "
-                                                        f"отменил заказ № {order.id}")
+    await bot.send_message(-STRINGS.new_orders_chat_id,
+                           f"[{callback.from_user.first_name} {last_name}]"
+                           f"(tg://user?id={callback.from_user.id}) "
+                           f"отменил заказ № {order.id}")
     await bot.delete_message(-STRINGS.new_orders_chat_id, order.status_msg)
 
 
@@ -228,30 +230,35 @@ async def accept_order(message: types.Message):
         await message.reply("Пожалуйста, отправьте команду в ответ на сообщение с заказом")
         return
     try:
-        price = float(message.text.replace(",", ".").strip().split()[1])
+        price_uan = float(message.text.replace(",", ".").strip().split()[1])
     except (IndexError, ValueError):
         logging.debug("User %s failed to accept order (amount not specified)", message.from_user.id)
         await message.reply("Пожалуйста, укажите сумму заказа в юанях")
         return
 
     session = create_session()
-    order = session.query(Order).filter(Order.status_msg == message.reply_to_message.message_id).first()
+    order = session.query(Order).filter(
+        Order.status_msg == message.reply_to_message.message_id
+    ).first()
+
     if not order:
         logging.warning("Failed to accept order (reply_to message is not order message)")
-        await message.reply("Пожалуйста, отправляйте команду в ответ на сообщение с составом заказа")
+        await message.reply("Пожалуйста, отправляйте команду в ответ "
+                            "на сообщение с составом заказа")
         return
+
     exchange_rate = float(session.query(Variable)
                           .filter(Variable.name == "exchange_rate").first().value)
-    price_formatted = ceil(price * exchange_rate)
-    fee = float(price_formatted) * STRINGS.fee / 100
-    total = str(ceil(price_formatted + fee)).replace('.', '\\.')
+    price_rub = ceil(price_uan * exchange_rate)
+    fee = float(price_rub) * STRINGS.fee / 100
+    total_rub = str(ceil(price_rub + fee)).replace('.', '\\.')
     fee = str(ceil(fee)).replace('.', '\\.')
-    order.amount = price_formatted
+    order.amount = price_rub
     order.status += 1
     session.commit()
 
-    price_formatted = str(price_formatted).replace(".", "\\.")
-    price = str(price).replace(".", "\\.")
+    price_formatted = str(price_rub).replace(".", "\\.")
+    price_uan = str(price_uan).replace(".", "\\.")
 
     customer_chat = await bot.get_chat(order.customer)
     last_name = customer_chat.last_name if \
@@ -262,19 +269,19 @@ async def accept_order(message: types.Message):
                  f"(tg://user?id={order.customer})\n" \
                  f"*Состав\\:*\n" \
                  f"{order_items}\n\n" \
-                 f"*Стоимость:* {price_formatted} руб\\. \\({price} юаней\\)\n" \
+                 f"*Стоимость:* {price_formatted} руб\\. \\({price_uan} юаней\\)\n" \
                  f"*Комиссия \\({STRINGS.fee}%\\)*: {fee} руб\\.\n" \
-                 f"*Итого:* {total} руб\\.\n" \
+                 f"*Итого:* {total_rub} руб\\.\n" \
                  f"*Статус:* \\#ожидание\\_оплаты"
-    print(order_text)
     await message.reply_to_message.edit_text(order_text, disable_web_page_preview=True)
-    await message.reply(f"Заказу № {order.id} установлена цена в {price} юаней \\= {price_formatted} руб\\. "
+    await message.reply(f"Заказу № {order.id} установлена цена в {price_uan} юаней "
+                        f"\\= {price_formatted} руб\\. "
                         f"Комиссия \\({STRINGS.fee}%\\): {fee} руб\\.")
     await bot.delete_message(order.customer, order.origin_msg)
     text = f"*Ваш заказ № {order.id} подтверждён ✅\\!*\n\n{order_items}\n\n" \
            f"Сумма заказа: {price_formatted} руб\\.\n" \
            f"Комиссия: {fee} руб\\.\n" \
-           f"*Итого к оплате: {total} руб\\.*\n\n" \
+           f"*Итого к оплате: {total_rub} руб\\.*\n\n" \
            f"Пожалуйста, выберите способ оплаты ниже и оплатите заказ\\."
     origin_msg = await bot.send_message(order.customer, text, disable_web_page_preview=True)
     order.origin_msg = origin_msg

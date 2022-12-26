@@ -1,10 +1,14 @@
+"""
+Module for using SQLite as aiogram storage
+"""
 import typing
 
 import sqlalchemy as sa
 import sqlalchemy.ext.declarative as dec
-import sqlalchemy.orm as orm
+from aiogram.dispatcher.filters.state import State
 from aiogram.dispatcher.storage import BaseStorage
 from sqlalchemy import Column, Integer, String, ForeignKey
+from sqlalchemy import orm
 from sqlalchemy.orm import Session
 
 SqlAlchemyBase = dec.declarative_base()
@@ -58,6 +62,9 @@ class SQLiteStorage(BaseStorage):
         SqlAlchemyBase.metadata.create_all(engine)
 
     def create_session(self) -> Session:
+        """
+        Creates SQL session
+        """
         return self.__factory()
 
     async def close(self):
@@ -103,6 +110,13 @@ class SQLiteStorage(BaseStorage):
                           chat: typing.Union[str, int],
                           user: typing.Union[str, int],
                           session=None):
+        """
+        Queries dialogue state
+        :param chat: Telegram chat id
+        :param user: Telegram user id
+        :param session: SQL session
+        :return:
+        """
         if not session:
             session = self.create_session()
 
@@ -348,10 +362,8 @@ class SQLiteStorage(BaseStorage):
 
     @staticmethod
     def resolve_state(value):
-        from aiogram.dispatcher.filters.state import State
-
         if value is None:
-            return
+            return None
 
         if isinstance(value, str):
             return value

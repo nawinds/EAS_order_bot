@@ -42,7 +42,8 @@ class OrderStats(SqlAlchemyBase):
     Order stats object linked to 'order_stats' table of DB
     """
     __tablename__ = "order_stats"
-    order_id = Column(sqlalchemy.Integer, ForeignKey("orders.id"), primary_key=True, unique=True, index=True)
+    order_id = Column(sqlalchemy.Integer, ForeignKey("orders.id"),
+                      primary_key=True, unique=True, index=True)
     d_course = Column(Integer)
     comission = Column(Integer)
     total = Column(Integer)
