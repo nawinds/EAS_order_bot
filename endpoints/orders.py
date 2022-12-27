@@ -346,15 +346,71 @@ async def pay_card(callback: types.CallbackQuery):
     session = create_session()
     order = session.query(Order).get(order_id)
     await bot.delete_message(order.customer, order.origin_msg)
+
     markup = InlineKeyboardMarkup()
-    markup.row(InlineKeyboardButton("Я оплатил", callback_data=f"act:check-pay-card,{order.id}"))
+    markup.row(InlineKeyboardButton("✅ Я оплатил", callback_data=f"act:check-pay-card,{order.id}"))
+    order_items = '\n'.join([f"\\- {escape_md(i.url)}" for i in order.items])
     payment_msg = await bot.send_message(callback.from_user.id,
+                                         f"*Ваш заказ № {order.id} ожидает оплаты*\n\n{order_items}\n\n"
                                          f"Сделайте перевод по указанному номеру карты\\.\n"
                                          f"*ВАЖНО\\! В примечании к переводу напишите:*\n\n"
                                          f"`Номер заказа: {order_id}`\n\n"
                                          f"_Номер карты для перевода:_ {STRINGS.card_number}\n\n"
                                          f"После перевода обязательно нажмите кнопку \"Я оплатил\"\\.",
-                                         reply_markup=markup)
+                                         reply_markup=markup, disable_web_page_preview=True)
     order.origin_msg = payment_msg.message_id
     order.status = 4
     session.commit()
+
+
+@dp.callback_query_handler(Text(startswith="act:check-pay-card"), chat_type=ChatType.PRIVATE)
+async def pay_card_check(callback: types.CallbackQuery):
+    """
+    Card payment check method handler
+    :param callback: Telegram callback object
+    """
+    await callback.answer("Спасибо! Дождитесь проверки перевода")
+    try:
+        order_id = int(callback.data.split(",")[1])
+    except (IndexError, ValueError):
+        logging.exception("Card payment wrong callback")
+        await bot.send_message(callback.from_user.id, "Произошла ошибка (wrong callback)")
+        return
+
+    session = create_session()
+    order = session.query(Order).get(order_id)
+    await bot.delete_message(order.customer, order.origin_msg)
+
+    order_items = '\n'.join([f"\\- {escape_md(i.url)}" for i in order.items])
+    info_msg = await bot.send_message(callback.from_user.id,
+                                      f"*Ваш заказ № {order.id} ожидает "
+                                      f"подтверждения оплаты*\n\n{order_items}\n\n"
+                                      f"Наши операторы проверят факт "
+                                      f"совершения перевода на нужную сумму\\. "
+                                      f"Если средства поступят, мы начнём собирать заказ",
+                                      disable_web_page_preview=True)
+    order.origin_msg = info_msg.message_id
+    order.status = 6
+    session.commit()
+
+    markup = InlineKeyboardMarkup()
+    markup.row(InlineKeyboardButton("✅Оплачено", callback_data=f"act:accept-pay-card,{order.id}"),
+               InlineKeyboardButton("❌НЕ оплачено", callback_data=f"act:deny-pay-card,{order.id}"))
+    customer_chat = await bot.get_chat(order.customer)
+    last_name = customer_chat.last_name if \
+        customer_chat.last_name else ""
+    order_items = '\n'.join([f"\\- {escape_md(i.url)}" for i in order.items])
+    order_text = f"*Заказ № {order.id}*\n\n" \
+                 f"*Клиент\\:* [{escape_md(customer_chat.first_name)} {escape_md(last_name)}]" \
+                 f"(tg://user?id={order.customer})\n" \
+                 f"*Состав\\:*\n" \
+                 f"{order_items}\n\n" \
+                 f"*Стоимость:* {order.amount} руб\\.\n" \
+                 f"*Комиссия \\({STRINGS.fee}%\\)*: {order.total - order.amount} руб\\.\n" \
+                 f"*Итоговая стоимость:* {order.total} руб\\.\n" \
+                 f"*Статус:* \\#ожидание\\_подтверждения\\_оплаты\n\n" \
+                 f"Пожалуйста, проверьте факт совершения оплаты"
+    await bot.delete_message(-STRINGS.new_orders_chat_id, order.status_msg)
+    await bot.send_message(-STRINGS.new_orders_chat_id,
+                           order_text, reply_markup=markup,
+                           disable_web_page_preview=True)
