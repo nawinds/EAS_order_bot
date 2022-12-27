@@ -44,7 +44,7 @@ class OrderStats(SqlAlchemyBase):
     __tablename__ = "order_stats"
     order_id = Column(sqlalchemy.Integer, ForeignKey("orders.id"),
                       primary_key=True, unique=True, index=True)
-    d_course = Column(Integer)
+    delta_exchange_rate = Column(Integer)
     comission = Column(Integer)
     total = Column(Integer)
 

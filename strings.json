@@ -14,5 +14,10 @@
     972048830
   ],
   "new_orders_chat_id": 886531645,
-  "fee": 5
+  "fee": 5,
+  "crypto_list": [
+    "Bitcoin",
+    "Ethereum"
+  ],
+  "card_number": 1234567812345678
 }

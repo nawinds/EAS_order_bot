@@ -20,7 +20,7 @@ from modules.config import STRINGS
 from modules.data.db_session import create_session
 from modules.data.orders import Order, OrderItem
 from modules.data.variables import Variable
-from modules.helper import validate_url
+from modules.helper import validate_url, get_order_by_message
 
 
 class OrderingState(StatesGroup):
@@ -183,12 +183,12 @@ async def checkout(callback: types.CallbackQuery, state: FSMContext):
                                                disable_web_page_preview=True)
     order.origin_msg = origin_message.message_id
     order.status_msg = new_order_message.message_id
-    order.status += 1
+    order.status = 1
     session.commit()
 
 
 @dp.callback_query_handler(Text(contains="act:cancel_order"), chat_type=ChatType.PRIVATE)
-async def cancel(callback: types.CallbackQuery):
+async def cancel_order(callback: types.CallbackQuery):
     """
     Cancel order
     :param callback: Callback or message Telegram object
@@ -202,7 +202,6 @@ async def cancel(callback: types.CallbackQuery):
     session.commit()
     logging.debug("User %s cancelled %s order", callback.from_user.id, order.id)
     await callback.answer("Заказ отменён!")
-    await bot.send_message(callback.from_user.id, f"Заказ {order_id} отменён\\!")
 
     last_name = callback.from_user.last_name if callback.from_user.last_name else ""
     order_items = '\n'.join([f"\\- {escape_md(i.url)}" for i in order.items])
@@ -213,7 +212,7 @@ async def cancel(callback: types.CallbackQuery):
 
     await callback.message.edit_text(text, disable_web_page_preview=True)
     await bot.send_message(-STRINGS.new_orders_chat_id,
-                           f"[{callback.from_user.first_name} {last_name}]"
+                           f"[{escape_md(callback.from_user.first_name)} {escape_md(last_name)}]"
                            f"(tg://user?id={callback.from_user.id}) "
                            f"отменил заказ № {order.id}")
     await bot.delete_message(-STRINGS.new_orders_chat_id, order.status_msg)
@@ -237,35 +236,31 @@ async def accept_order(message: types.Message):
         return
 
     session = create_session()
-    order = session.query(Order).filter(
-        Order.status_msg == message.reply_to_message.message_id
-    ).first()
-
+    order = await get_order_by_message(message, session)
     if not order:
-        logging.warning("Failed to accept order (reply_to message is not order message)")
-        await message.reply("Пожалуйста, отправляйте команду в ответ "
-                            "на сообщение с составом заказа")
         return
 
     exchange_rate = float(session.query(Variable)
                           .filter(Variable.name == "exchange_rate").first().value)
     price_rub = ceil(price_uan * exchange_rate)
     fee = float(price_rub) * STRINGS.fee / 100
-    total_rub = str(ceil(price_rub + fee)).replace('.', '\\.')
+    total_rub = ceil(price_rub + fee)
     fee = str(ceil(fee)).replace('.', '\\.')
     order.amount = price_rub
-    order.status += 1
+    order.total = total_rub
+    order.status = 2
     session.commit()
 
     price_formatted = str(price_rub).replace(".", "\\.")
     price_uan = str(price_uan).replace(".", "\\.")
+    total_rub = str(total_rub).replace('.', '\\.')
 
     customer_chat = await bot.get_chat(order.customer)
     last_name = customer_chat.last_name if \
         customer_chat.last_name else ""
     order_items = '\n'.join([f"\\- {escape_md(i.url)}" for i in order.items])
     order_text = f"*Заказ № {order.id}*\n\n" \
-                 f"*Клиент\\:* [{customer_chat.first_name} {last_name}]" \
+                 f"*Клиент\\:* [{escape_md(customer_chat.first_name)} {escape_md(last_name)}]" \
                  f"(tg://user?id={order.customer})\n" \
                  f"*Состав\\:*\n" \
                  f"{order_items}\n\n" \
@@ -282,7 +277,84 @@ async def accept_order(message: types.Message):
            f"Сумма заказа: {price_formatted} руб\\.\n" \
            f"Комиссия: {fee} руб\\.\n" \
            f"*Итого к оплате: {total_rub} руб\\.*\n\n" \
-           f"Пожалуйста, выберите способ оплаты ниже и оплатите заказ\\."
+           f"Пожалуйста, выберите способ оплаты ниже и оплатите заказ\\.\n\n" \
+           f"*Список принимаемых криптовалют:*\n" \
+           f"_{', '.join(STRINGS.crypto_list)}_"
+
+    markup = InlineKeyboardMarkup()
+    markup.row(InlineKeyboardButton("Банковский перевод", callback_data=f"act:pay-card,{order.id}"))
+    markup.row(InlineKeyboardButton("Криптовалюта", callback_data=f"act:pay-crypto,{order.id}"))
+
+    origin_msg = await bot.send_message(order.customer, text,
+                                        reply_markup=markup,
+                                        disable_web_page_preview=True)
+    order.origin_msg = origin_msg.message_id
+    session.commit()
+
+
+@dp.message_handler(chat_type=ChatType.GROUP, commands="deny")
+async def deny_order(message: types.Message):
+    """
+    Deny new order (in admins group chat)
+    :param message: Telegram message object
+    """
+    if not message.reply_to_message:
+        logging.debug("User %s failed to deny order (no reply_to message)", message.from_user.id)
+        await message.reply("Пожалуйста, отправьте команду в ответ на сообщение с заказом")
+        return
+    try:
+        reason = " ".join(message.text.strip().split()[1:])
+        if not reason:
+            raise ValueError
+    except (IndexError, ValueError):
+        logging.debug("User %s failed to deny order (reason not specified)", message.from_user.id)
+        await message.reply("Пожалуйста, укажите причину отказа")
+        return
+
+    session = create_session()
+    order = await get_order_by_message(message, session)
+    if not order:
+        return
+
+    order_items = '\n'.join([f"\\- {escape_md(i.url)}" for i in order.items])
+    await bot.delete_message(-STRINGS.new_orders_chat_id, order.status_msg)
+    await message.reply(f"Заказ № {order.id} отклонён")
+    await bot.delete_message(order.customer, order.origin_msg)
+
+    text = f"*Ваш заказ № {order.id} ОТКЛОНЁН ❌\\!*\n\n{order_items}\n\n" \
+           f"Причина: {escape_md(reason)}\n\n" \
+           f"Пожалуйста, сделайте новый заказ, приняв во внимание причину отклонения этого\\."
     origin_msg = await bot.send_message(order.customer, text, disable_web_page_preview=True)
-    order.origin_msg = origin_msg
+    order.origin_msg = origin_msg.message_id
+    order.status = 3
+    session.commit()
+
+
+@dp.callback_query_handler(Text(startswith="act:pay-card"), chat_type=ChatType.PRIVATE)
+async def pay_card(callback: types.CallbackQuery):
+    """
+    Card payment method handler
+    :param callback: Telegram callback object
+    """
+    await callback.answer("Следуйте инструкции по переводу")
+    try:
+        order_id = int(callback.data.split(",")[1])
+    except (IndexError, ValueError):
+        logging.exception("Card payment wrong callback")
+        await bot.send_message(callback.from_user.id, "Произошла ошибка (wrong callback)")
+        return
+    session = create_session()
+    order = session.query(Order).get(order_id)
+    await bot.delete_message(order.customer, order.origin_msg)
+    markup = InlineKeyboardMarkup()
+    markup.row(InlineKeyboardButton("Я оплатил", callback_data=f"act:check-pay-card,{order.id}"))
+    payment_msg = await bot.send_message(callback.from_user.id,
+                                         f"Сделайте перевод по указанному номеру карты\\.\n"
+                                         f"*ВАЖНО\\! В примечании к переводу напишите:*\n\n"
+                                         f"`Номер заказа: {order_id}`\n\n"
+                                         f"_Номер карты для перевода:_ {STRINGS.card_number}\n\n"
+                                         f"После перевода обязательно нажмите кнопку \"Я оплатил\"\\.",
+                                         reply_markup=markup)
+    order.origin_msg = payment_msg.message_id
+    order.status = 4
     session.commit()

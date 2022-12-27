@@ -1,11 +1,16 @@
 """
 Helper functions and message filters
 """
+import logging
+
 import aiohttp
+from aiogram import types
 from aiogram.types import Message
 from aiohttp.client_exceptions import InvalidURL, ClientConnectorError
+from sqlalchemy.orm.session import Session
 
 from modules.config import STRINGS
+from modules.data.orders import Order
 
 
 def is_admin(message: Message) -> bool:
@@ -41,3 +46,16 @@ async def validate_url(url: str) -> bool:
         except (InvalidURL, ClientConnectorError, ValueError):
             return False
     return True
+
+
+async def get_order_by_message(message: types.Message, session: Session) -> (Order, None):
+    order = session.query(Order).filter(
+        Order.status_msg == message.reply_to_message.message_id
+    ).first()
+
+    if not order:
+        logging.warning("Failed to accept order (reply_to message is not order message)")
+        await message.reply("Пожалуйста, отправляйте команду в ответ "
+                            "на сообщение с составом заказа")
+        return
+    return order
