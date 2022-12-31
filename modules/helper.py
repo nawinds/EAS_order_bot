@@ -16,10 +16,22 @@ from aiogram.dispatcher.filters import Filter
 
 
 class MessageStatus(Filter):
+    """
+    Order status checker for message objects
+    """
     def __init__(self, status):
+        """
+        Initialization of order status checker
+        :param status: required order status
+        """
         self.status = status
 
     async def check(self, message: types.Message) -> bool:
+        """
+        Checks if order status equals the status set during initialization
+        :param message: Telegram message object
+        :return: bool
+        """
         session = create_session()
         order = session.query(Order).filter(
             Order.origin_msg == message.reply_to_message.message_id
@@ -28,10 +40,22 @@ class MessageStatus(Filter):
 
 
 class CallbackStatus(Filter):
+    """
+    Order status checker for callback objects
+    """
     def __init__(self, status):
+        """
+        Initialization of order status checker
+        :param status: required order status
+        """
         self.status = status
 
     async def check(self, callback: types.CallbackQuery) -> bool:
+        """
+        Checks if order status equals the status set during initialization
+        :param callback: Telegram callback object
+        :return: bool
+        """
         order_id = int(callback.data.split(",")[1])
         session = create_session()
         order = session.query(Order).get(order_id)
