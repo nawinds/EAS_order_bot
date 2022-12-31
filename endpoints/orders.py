@@ -10,6 +10,7 @@ from aiogram import types
 from aiogram.dispatcher import FSMContext
 from aiogram.dispatcher.filters import Text
 from aiogram.dispatcher.filters.state import State, StatesGroup
+from aiogram.types import ContentType
 from aiogram.types.chat import ChatType
 from aiogram.types.force_reply import ForceReply
 from aiogram.types.inline_keyboard import InlineKeyboardMarkup, InlineKeyboardButton
@@ -20,7 +21,7 @@ from modules.config import STRINGS
 from modules.data.db_session import create_session
 from modules.data.orders import Order, OrderItem
 from modules.data.variables import Variable
-from modules.helper import validate_url, get_order_by_message
+from modules.helper import CallbackStatus, MessageStatus, validate_url, get_order_by_message
 
 
 class OrderingState(StatesGroup):
@@ -84,7 +85,7 @@ async def create_order(message: types.Message, state: FSMContext):
     await OrderingState.next()
 
     markup = InlineKeyboardMarkup()
-    markup.row(InlineKeyboardButton("Оформить заказ", callback_data="act:checkout"))
+    markup.row(InlineKeyboardButton("✅ Оформить заказ", callback_data="act:checkout"))
 
     text = f"*Корзина*:\n\n\\- {escape_md(url)}\n\n" \
            f"Если Вы хотите добавить в заказ ещё один товар, отправьте ссылку на него\\. " \
@@ -125,7 +126,7 @@ async def add_item(message: types.Message, state: FSMContext):
     session.commit()
 
     markup = InlineKeyboardMarkup()
-    markup.row(InlineKeyboardButton("Оформить заказ", callback_data="act:checkout"))
+    markup.row(InlineKeyboardButton("✅ Оформить заказ", callback_data="act:checkout"))
 
     order_items = '\n'.join([f"\\- {escape_md(i.url)}" for i in order.items])
 
@@ -154,7 +155,7 @@ async def checkout(callback: types.CallbackQuery, state: FSMContext):
     await state.finish()
 
     markup = InlineKeyboardMarkup()
-    markup.row(InlineKeyboardButton("Отменить заказ", callback_data=f"act:cancel_order {order.id}"))
+    markup.row(InlineKeyboardButton("❌ Отменить заказ", callback_data=f"act:cancel_order {order.id}"))
 
     order_items = '\n'.join([f"\\- {escape_md(i.url)}" for i in order.items])
 
@@ -205,10 +206,7 @@ async def cancel_order(callback: types.CallbackQuery):
 
     last_name = callback.from_user.last_name if callback.from_user.last_name else ""
     order_items = '\n'.join([f"\\- {escape_md(i.url)}" for i in order.items])
-    text = f"*Ваш заказ № {order.id} ОТМЕНЁН ❌\\!*\n\n{order_items}\n\n" \
-           f"Мы постаемся как можно быстрее рассмотреть Ваш заказ и " \
-           f"определить его итоговую стоимость в рублях\\. " \
-           f"Когда мы всё посчитаем, Вам придёт сообщение с суммой заказа и реквизитами для оплаты"
+    text = f"*Ваш заказ № {order.id} ОТМЕНЁН ❌\\!*\n\n{order_items}\n\n"
 
     await callback.message.edit_text(text, disable_web_page_preview=True)
     await bot.send_message(-STRINGS.new_orders_chat_id,
@@ -282,8 +280,9 @@ async def accept_order(message: types.Message):
            f"_{', '.join(STRINGS.crypto_list)}_"
 
     markup = InlineKeyboardMarkup()
-    markup.row(InlineKeyboardButton("Банковский перевод", callback_data=f"act:pay-card,{order.id}"))
-    markup.row(InlineKeyboardButton("Криптовалюта", callback_data=f"act:pay-crypto,{order.id}"))
+    markup.row(InlineKeyboardButton("💳 Банковский перевод", callback_data=f"act:pay-card,{order.id}"))
+    markup.row(InlineKeyboardButton("₿ Криптовалюта", callback_data=f"act:pay-crypto,{order.id}"))
+    markup.row(InlineKeyboardButton("❌ Отменить заказ", callback_data=f"act:cancel_order {order.id}"))
 
     origin_msg = await bot.send_message(order.customer, text,
                                         reply_markup=markup,
@@ -330,7 +329,7 @@ async def deny_order(message: types.Message):
     session.commit()
 
 
-@dp.callback_query_handler(Text(startswith="act:pay-card"), chat_type=ChatType.PRIVATE)
+@dp.callback_query_handler(Text(startswith="act:pay-card"), CallbackStatus(2), chat_type=ChatType.PRIVATE)
 async def pay_card(callback: types.CallbackQuery):
     """
     Card payment method handler
@@ -348,41 +347,50 @@ async def pay_card(callback: types.CallbackQuery):
     await bot.delete_message(order.customer, order.origin_msg)
 
     markup = InlineKeyboardMarkup()
-    markup.row(InlineKeyboardButton("✅ Я оплатил", callback_data=f"act:check-pay-card,{order.id}"))
+    markup.row(InlineKeyboardButton("❌ Отменить заказ", callback_data=f"act:cancel_order {order.id}"))
     order_items = '\n'.join([f"\\- {escape_md(i.url)}" for i in order.items])
     payment_msg = await bot.send_message(callback.from_user.id,
                                          f"*Ваш заказ № {order.id} ожидает оплаты*\n\n{order_items}\n\n"
                                          f"Сделайте перевод по указанному номеру карты\\.\n"
-                                         f"*ВАЖНО\\! В примечании к переводу напишите:*\n\n"
+                                         f"*ВАЖНО\\! Если возможно, в примечании к переводу напишите:*\n\n"
                                          f"`Номер заказа: {order_id}`\n\n"
                                          f"_Номер карты для перевода:_ {STRINGS.card_number}\n\n"
-                                         f"После перевода обязательно нажмите кнопку \"Я оплатил\"\\.",
+                                         f"После перевода обязательно отправьте "
+                                         f"*в ответ на это сообщение* скриншот "
+                                         f"экрана подтверждения платежа или фото квитанции, "
+                                         f"где видно сумму, дату и время совершения "
+                                         f"перевода\\.",
                                          reply_markup=markup, disable_web_page_preview=True)
     order.origin_msg = payment_msg.message_id
     order.status = 4
     session.commit()
 
 
-@dp.callback_query_handler(Text(startswith="act:check-pay-card"), chat_type=ChatType.PRIVATE)
-async def pay_card_check(callback: types.CallbackQuery):
+@dp.message_handler(MessageStatus(4), chat_type=ChatType.PRIVATE, content_types=[ContentType.PHOTO])
+async def pay_card_check(message: types.Message):
     """
     Card payment check method handler
-    :param callback: Telegram callback object
+    :param message: Telegram message object
     """
-    await callback.answer("Спасибо! Дождитесь проверки перевода")
-    try:
-        order_id = int(callback.data.split(",")[1])
-    except (IndexError, ValueError):
-        logging.exception("Card payment wrong callback")
-        await bot.send_message(callback.from_user.id, "Произошла ошибка (wrong callback)")
+    if not message.reply_to_message:
+        await message.reply("Если Вы отправили фото с квитанцией перевода, то отправьте его заново, "
+                            "пожалуйста, так, чтобы оно было ответом на сообщение с инструкцией "
+                            "по переводу")
+        logging.info("%s user sent a photo without reply_to message", message.from_user.id)
+        return
+    session = create_session()
+    order = session.query(Order).filter(Order.origin_msg == message.reply_to_message.message_id).first()
+    if not order:
+        await message.reply("Пожалуйста, отправляйте фото в ответ "
+                            "на сообщение с инструкциями по переводу")
+        logging.info("%s user sent photo in reply to message without order details",
+                     message.from_user.id)
         return
 
-    session = create_session()
-    order = session.query(Order).get(order_id)
     await bot.delete_message(order.customer, order.origin_msg)
 
     order_items = '\n'.join([f"\\- {escape_md(i.url)}" for i in order.items])
-    info_msg = await bot.send_message(callback.from_user.id,
+    info_msg = await bot.send_message(message.from_user.id,
                                       f"*Ваш заказ № {order.id} ожидает "
                                       f"подтверждения оплаты*\n\n{order_items}\n\n"
                                       f"Наши операторы проверят факт "
@@ -409,8 +417,8 @@ async def pay_card_check(callback: types.CallbackQuery):
                  f"*Комиссия \\({STRINGS.fee}%\\)*: {order.total - order.amount} руб\\.\n" \
                  f"*Итоговая стоимость:* {order.total} руб\\.\n" \
                  f"*Статус:* \\#ожидание\\_подтверждения\\_оплаты\n\n" \
-                 f"Пожалуйста, проверьте факт совершения оплаты"
+                 f"Пожалуйста, проверьте факт совершения оплаты\\.\n" \
+                 f"Оплата совершена *банковским переводом*\\. На фото — квитанция"
     await bot.delete_message(-STRINGS.new_orders_chat_id, order.status_msg)
-    await bot.send_message(-STRINGS.new_orders_chat_id,
-                           order_text, reply_markup=markup,
-                           disable_web_page_preview=True)
+    await bot.send_photo(-STRINGS.new_orders_chat_id, photo=message.photo[0].file_id,
+                         caption=order_text, reply_markup=markup)

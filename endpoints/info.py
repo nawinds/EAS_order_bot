@@ -27,18 +27,19 @@ class CalculatorState(StatesGroup):
     price = State()
 
 
+@dp.callback_query_handler(chat_type=ChatType.PRIVATE, text="act:menu")
 @dp.message_handler(chat_type=ChatType.PRIVATE, commands=["start", "help"])
-async def start_help(message: types.Message):
+async def start_help(callback: Union[types.CallbackQuery, types.Message]):
     """
     /start and /help command handler.
     Used for getting user menu and information about bot usage
-    :param message: Telegram message object
+    :param callback: Telegram callback or message object
     """
     text = STRINGS.start_info
 
     admin_text = "\n\n\\-\\-\\-\\- *ДЛЯ АДМИНА* \\-\\-\\-\\-\n\n" \
                  "/exchange\\_rate — установить курс с наценкой"
-    if is_admin(message):
+    if is_admin(callback):
         text += admin_text
 
     contact_user_id = choice(STRINGS.contact_user_id)
@@ -48,11 +49,15 @@ async def start_help(message: types.Message):
     markup.row(InlineKeyboardButton("ℹ️ Информация", callback_data="act:about"),
                InlineKeyboardButton("💬 Отзывы", url=STRINGS.feedback_url))
     markup.row(InlineKeyboardButton("💴 Калькулятор стоимости", callback_data="act:calculator"))
-    markup.row(InlineKeyboardButton("Сделать заказ", callback_data="act:order"))
+    markup.row(InlineKeyboardButton("🛒 Сделать заказ", callback_data="act:order"))
     markup.row(InlineKeyboardButton("🧑‍🔧 Написать нам", url=contact_link))
 
-    logging.debug("User %s requested a help message", message.from_user.id)
-    await message.reply(text, reply_markup=markup)
+    logging.debug("User %s requested a help message", callback.from_user.id)
+    if isinstance(callback, types.CallbackQuery):
+        await callback.answer()
+        await callback.message.edit_text(text, reply_markup=markup)
+    else:
+        await bot.send_message(callback.from_user.id, text, reply_markup=markup)
 
 
 @dp.callback_query_handler(chat_type=ChatType.PRIVATE, text="act:about")
@@ -68,7 +73,9 @@ async def about(callback: Union[types.CallbackQuery, types.Message]):
     logging.debug("User %s got about message", callback.from_user.id)
     if isinstance(callback, types.CallbackQuery):
         await callback.answer()
-    await bot.send_message(callback.from_user.id, text)
+    markup = InlineKeyboardMarkup()
+    markup.row(InlineKeyboardButton("← Назад", callback_data="act:menu"))
+    await callback.message.edit_text(text, reply_markup=markup)
 
 
 @dp.callback_query_handler(chat_type=ChatType.PRIVATE, text="act:calculator")

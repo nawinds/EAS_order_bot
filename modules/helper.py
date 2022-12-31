@@ -10,7 +10,32 @@ from aiohttp.client_exceptions import InvalidURL, ClientConnectorError
 from sqlalchemy.orm.session import Session
 
 from modules.config import STRINGS
+from modules.data.db_session import create_session
 from modules.data.orders import Order
+from aiogram.dispatcher.filters import Filter
+
+
+class MessageStatus(Filter):
+    def __init__(self, status):
+        self.status = status
+
+    async def check(self, message: types.Message) -> bool:
+        session = create_session()
+        order = session.query(Order).filter(
+            Order.origin_msg == message.reply_to_message.message_id
+        ).first()
+        return order.status == self.status
+
+
+class CallbackStatus(Filter):
+    def __init__(self, status):
+        self.status = status
+
+    async def check(self, callback: types.CallbackQuery) -> bool:
+        order_id = int(callback.data.split(",")[1])
+        session = create_session()
+        order = session.query(Order).get(order_id)
+        return order.status == self.status
 
 
 def is_admin(message: Message) -> bool:
