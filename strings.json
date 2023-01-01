@@ -19,5 +19,15 @@
     "Bitcoin",
     "Ethereum"
   ],
-  "card_number": 4960145948178804
+  "card_number": 4960145948178804,
+  "crypto_wallets": [
+    [
+      "Bitcoin",
+      "btc1jigruifkhjgifke"
+    ],
+    [
+      "Ethereum",
+      "ethjvefkdjigresfres"
+    ]
+  ]
 }

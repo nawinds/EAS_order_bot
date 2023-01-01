@@ -15,7 +15,7 @@ from modules.config import STRINGS
 from modules.data.db_session import create_session
 from modules.data.orders import Order
 from modules.data.variables import Variable
-from modules.helper import get_order_by_message, get_customer_last_name_and_order_items
+from modules.helper import get_order_by_message, get_customer_last_name_and_order_items, write_us
 
 
 @dp.callback_query_handler(Text(startswith="act:cancel_order"), chat_type=ChatType.PRIVATE)
@@ -104,13 +104,14 @@ async def accept_order(message: types.Message):
                       f"*Итого к оплате: {total_rub} руб\\.*\n\n" \
                       f"Пожалуйста, выберите способ оплаты ниже и оплатите заказ\\.\n\n" \
                       f"*Список принимаемых криптовалют:*\n" \
-                      f"_{', '.join(STRINGS.crypto_list)}_"
-    markup = InlineKeyboardMarkup()
-    markup.row(InlineKeyboardButton("💳 Банковский перевод", callback_data=f"act:pay-card {order.id}"))
-    markup.row(InlineKeyboardButton("₿ Криптовалюта", callback_data=f"act:pay-crypto {order.id}"))
-    markup.row(InlineKeyboardButton("❌ Отменить заказ", callback_data=f"act:cancel_order {order.id}"))
+                      f"_{', '.join(STRINGS.crypto_list)}_\n\n" \
+                      f"По любым вопросам {write_us()}"
+    origin_msg_markup = InlineKeyboardMarkup()
+    origin_msg_markup.row(InlineKeyboardButton("💳 Банковский перевод", callback_data=f"act:pay-card {order.id}"))
+    origin_msg_markup.row(InlineKeyboardButton("₿ Криптовалюта", callback_data=f"act:pay-crypto {order.id}"))
+    origin_msg_markup.row(InlineKeyboardButton("❌ Отменить заказ", callback_data=f"act:cancel_order {order.id}"))
     origin_msg = await bot.send_message(order.customer, origin_msg_text,
-                                        reply_markup=markup,
+                                        reply_markup=origin_msg_markup,
                                         disable_web_page_preview=True)
     order.origin_msg = origin_msg.message_id
     session.commit()
@@ -143,12 +144,14 @@ async def deny_order(message: types.Message):
     _, _, order_items = await get_customer_last_name_and_order_items(order)
     await bot.delete_message(-STRINGS.new_orders_chat_id, order.status_msg)
     await message.reply(f"Заказ № {order.id} отклонён")
-    await bot.delete_message(order.customer, order.origin_msg)
 
     origin_msg_text = f"*Ваш заказ № {order.id} ОТКЛОНЁН ❌\\!*\n\n{order_items}\n\n" \
                       f"Причина: {escape_md(reason)}\n\n" \
-                      f"Пожалуйста, сделайте новый заказ, приняв во внимание причину отклонения этого\\."
+                      f"Пожалуйста, сделайте новый заказ, приняв во внимание причину отклонения этого\\. " \
+                      f"Если у Вас есть вопросы, {write_us()}"
+    await bot.delete_message(order.customer, order.origin_msg)
     origin_msg = await bot.send_message(order.customer, origin_msg_text, disable_web_page_preview=True)
+
     order.origin_msg = origin_msg.message_id
     order.status = 3
     session.commit()

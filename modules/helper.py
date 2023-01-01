@@ -2,6 +2,7 @@
 Helper functions and message filters
 """
 import logging
+from random import choice
 
 import aiohttp
 from aiogram import types
@@ -118,3 +119,23 @@ async def get_customer_last_name_and_order_items(order: Order) -> (str, list):
         customer_chat.last_name else ""
     order_items = '\n'.join([f"\\- {escape_md(i.url)}" for i in order.items])
     return escape_md(customer_chat.first_name), escape_md(last_name), order_items
+
+
+async def delete_and_send(session, order, origin_msg_text, status_msg_text,
+                          origin_msg_markup=None, status_msg_markup=None):
+    await bot.delete_message(order.customer, order.origin_msg)
+    origin_msg = await bot.send_message(order.customer, origin_msg_text,
+                                        reply_markup=origin_msg_markup, disable_web_page_preview=True)
+
+    await bot.delete_message(-STRINGS.new_orders_chat_id, order.status_msg)
+    status_msg = await bot.send_message(-STRINGS.new_orders_chat_id, status_msg_text,
+                                        reply_markup=status_msg_markup, disable_web_page_preview=True)
+    order.origin_msg = origin_msg.message_id
+    order.status_msg = status_msg.message_id
+    session.commit()
+
+
+def write_us(text="пишите нам"):
+    contact_user_id = choice(STRINGS.contact_user_id)
+    contact_link = f"tg://user?id={contact_user_id}"
+    return f"[{text}]({contact_link})"

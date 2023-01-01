@@ -46,6 +46,5 @@ class OrderStats(SqlAlchemyBase):
                       primary_key=True, unique=True, index=True)
     delta_exchange_rate = Column(Integer)
     comission = Column(Integer)
-    total = Column(Integer)
 
     order = relationship("Order", back_populates="stats")

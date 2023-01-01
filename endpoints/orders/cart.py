@@ -14,7 +14,7 @@ from modules.bot import dp, bot
 from modules.config import STRINGS
 from modules.data.db_session import create_session
 from modules.data.orders import Order, OrderItem
-from modules.helper import validate_url
+from modules.helper import validate_url, write_us
 
 
 class OrderingState(StatesGroup):
@@ -152,17 +152,19 @@ async def checkout(callback: types.CallbackQuery, state: FSMContext):
 
     order_items = '\n'.join([f"\\- {escape_md(i.url)}" for i in order.items])
 
-    text = f"*Ваш заказ № {order.id} оформлен ✅\\!*\n\n{order_items}\n\n" \
-           f"Мы постаемся как можно быстрее рассмотреть Ваш заказ и " \
-           f"определить его итоговую стоимость в рублях\\. " \
-           f"Когда мы всё посчитаем, Вам придёт сообщение с суммой заказа и реквизитами для оплаты"
+    origin_msg_text = f"*Ваш заказ № {order.id} оформлен ✅\\!*\n\n{order_items}\n\n" \
+                      f"Мы постаемся как можно быстрее рассмотреть Ваш заказ и " \
+                      f"определить его итоговую стоимость в рублях\\. " \
+                      f"Когда мы всё посчитаем, " \
+                      f"Вам придёт сообщение с суммой заказа и реквизитами для оплаты\\. " \
+                      f"Если остались вопросы, {write_us()}"
 
     logging.debug("User %s checkouted %s order", callback.from_user.id, order.id)
     await callback.answer()
-    origin_message = await bot.send_message(callback.from_user.id, text, reply_markup=markup,
+    origin_message = await bot.send_message(callback.from_user.id, origin_msg_text, reply_markup=markup,
                                             disable_web_page_preview=True)
     last_name = callback.from_user.last_name if callback.from_user.last_name else ""
-    new_order_text = f"*Новый заказ \\(№ {order.id}\\)*\n\n" \
+    status_msg_text = f"*Новый заказ \\(№ {order.id}\\)*\n\n" \
                      f"*Клиент\\:* [{callback.from_user.first_name} {last_name}]" \
                      f"(tg://user?id={callback.from_user.id})\n" \
                      f"*Состав\\:*\n" \
@@ -173,7 +175,7 @@ async def checkout(callback: types.CallbackQuery, state: FSMContext):
                      f"В ответ на это сообщение отправьте\n" \
                      f"/accept 123\\, где 123 — сумма заказа в юанях или\n" \
                      f"/deny reason\\, где reason — причина отказа обработать заказ"
-    new_order_message = await bot.send_message(-STRINGS.new_orders_chat_id, new_order_text,
+    new_order_message = await bot.send_message(-STRINGS.new_orders_chat_id, status_msg_text,
                                                disable_web_page_preview=True)
     order.origin_msg = origin_message.message_id
     order.status_msg = new_order_message.message_id
