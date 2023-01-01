@@ -5,14 +5,16 @@ import logging
 
 import aiohttp
 from aiogram import types
+from aiogram.dispatcher.filters import Filter
 from aiogram.types import Message
+from aiogram.utils.markdown import escape_md
 from aiohttp.client_exceptions import InvalidURL, ClientConnectorError
 from sqlalchemy.orm.session import Session
 
+from modules.bot import bot
 from modules.config import STRINGS
 from modules.data.db_session import create_session
 from modules.data.orders import Order
-from aiogram.dispatcher.filters import Filter
 
 
 class MessageStatus(Filter):
@@ -56,7 +58,7 @@ class CallbackStatus(Filter):
         :param callback: Telegram callback object
         :return: bool
         """
-        order_id = int(callback.data.split(",")[1])
+        order_id = int(callback.data.split()[1])
         session = create_session()
         order = session.query(Order).get(order_id)
         return order.status == self.status
@@ -108,3 +110,11 @@ async def get_order_by_message(message: types.Message, session: Session) -> (Ord
                             "на сообщение с составом заказа")
         return
     return order
+
+
+async def get_customer_last_name_and_order_items(order: Order) -> (str, list):
+    customer_chat = await bot.get_chat(order.customer)
+    last_name = customer_chat.last_name if \
+        customer_chat.last_name else ""
+    order_items = '\n'.join([f"\\- {escape_md(i.url)}" for i in order.items])
+    return escape_md(customer_chat.first_name), escape_md(last_name), order_items
